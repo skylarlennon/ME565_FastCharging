@@ -8,39 +8,54 @@ clc;clear;close all;
 % Emma Tum Suden        emmadt@umich.edu
 
 %% =============Battery Parameters=============
-% Note: Discharge is positive current
-series = 96;
-parallel = 74;
+% Battery Environment Params
+Tambient = 25; % [C] (typically function of time, going to be constant for the sake of this project)
 
+% Cell params
+OCVData = readmatrix("csv/OCV.csv"); % from [@vijay: insert link]
+SOC = OCVData(:,1);
+Vocv = OCVData(:,2);
 SOC_i = 0.99;
 SOC_f = 0.2;
-
 Qcell = 2.25; % [Ah]
+TcInit = Tambient;
+TsInit = Tambient;
+
+Rc = 1.94;
+Cc = 62.7;
+Ru = 3.19;
+Cs = 4.5;
+
+
+% Pack Params
+series = 96;
+parallel = 74;
 Qpack = Qcell*parallel;
 Rs_pack = 0.013*(series/parallel);
 R1_pack = 0.026*(series/parallel);
 R2_pack = 0.026*(series/parallel);
-% C1 = 1541;
 C1_pack = 53958*(parallel/series);
 C2_pack = 53958*(parallel/series);
 
-OCVData = readmatrix("csv/OCV.csv");
-SOC = OCVData(:,1);
-Vocv = OCVData(:,2);
+% Note: Discharge is positive current
 
 % TODO: 
-% - Make it so that it's actually like a battery pack
 % - Generate some test current profiles
 % - Emergency stop stuff for Vt being too low. 
 
 %% =============Load Current Profiles=============
-cc = Qpack; % [A]
+currentVal = Qpack; % [A]
 total_time = 60*60; % [s]
 sz = 1000;
-current = ones(sz,1) .* cc;
-time = linspace(0,total_time,sz);
 
-timeCurrentData = timeseries(current,time);
+% Create a current vector: first half = currentVal, second half = 0
+current = [ones(sz/2,1) * currentVal; zeros(sz/2,1)];
+
+% Generate corresponding time vector
+time = linspace(0, total_time, sz)';
+
+% Create timeseries object
+timeCurrentData = timeseries(current, time);
 
 %% =============Simulate=============
 % - Run the simulation here N = 1000 times
@@ -68,5 +83,16 @@ subplot(1,3,3)
 plot(ans.simTime,ans.VtOut,"LineWidth",2)
 xlabel('Time (s)')
 ylabel('V_T(t)')
+grid on
+
+figure
+hold on
+plot(ans.simTime,ans.TsOut,'LineWidth',2)
+plot(ans.simTime,ans.TcOut,'LineWidth',2)
+hold off
+xlabel('Time (s)')
+ylabel("Temp (C)")
+title("Surface and Core Temperature")
+legend('Surface Temp','Core Temp')
 grid on
 
