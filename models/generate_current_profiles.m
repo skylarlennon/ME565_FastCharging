@@ -18,7 +18,7 @@ clc;clear;close all;
 
 
 %% ===============From Paper===============
-rawFromPaper = readmatrix("csv/Current_Profile.csv");
+rawFromPaper = readmatrix("csv/P1_current_profile.csv");
 rawTime = rawFromPaper(:,1);
 rawCurrent = rawFromPaper(:,2);
 
@@ -30,12 +30,76 @@ title("Charge Current Profile from Paper __?__")
 grid on
 
 %% ===============CC===============
+run_time= 600; %seconds
+I_CC= 3; 
+delta_t= 1;
+time= 0:delta_t:run_time;
+current = I_CC* ones(size(time));
+data= [time', current'];
+filename = "csv/CC_current_profile.csv";
+writematrix(data,filename)
+%% ===============CC-Rest===============
+currentVal = 300; % [A]
+run_time = 60*60; % [s]
+sz = 1000;
 
+% Create a current vector: first half = currentVal, second half = 0
+current = [ones(sz/2,1) * currentVal; zeros(sz/2,1)];
+
+% Generate corresponding time vector
+time = linspace(0, run_time, sz)';
+
+% Create timeseries object
+timeCurrentData = timeseries(current, time);
 %% ===============CC-CV===============
+% [TODO]
 
 %% ===============Pulse===============
+run_time= 600; %seconds
+delta_t= 1;
+time= 0:delta_t:run_time;
+I_base= 0; % A
+I_pulse= 4; % A
+t_pulse= 5; % s
+pulse_start_t= 10; %s
+pulse_end= pulse_start_t + t_pulse;
+current= I_base* ones(size(time));
+for i=1:length(time)
+    t= time(i);
+    if t>= pulse_start_t && t<pulse_end
+        current(i)= I_pulse;
+    else
+        current(i)= I_base;
+    end
+end
+data= [time', current'];
+filename = "csv/Pulse_current_profile.csv";
+writematrix( data, filename )
 
-
+%% ===============Pulses===============
+run_time= 600; %seconds
+delta_t= 1;
+time= 0:delta_t:run_time;
+I_base= 0; % A
+I_pulse= 4; % A
+t_pulse= 5; %s
+t_break= 10; %s
+current = zeros(size(time));
+pulse_time= t_pulse + t_break;
+for i = 1:length(time)
+    t = time(i);
+    % Determine if we're in the ON or OFF part of the pulse cycle
+    remainder = mod(t, pulse_time);
+    
+    if remainder < t_pulse
+        current(i) = I_pulse;  % ON phase
+    else
+        current(i) = I_base;   % OFF phase
+    end
+end
+data= [time', current'];
+filename = "csv/Pulses_current_profile.csv";
+writematrix( data, filename )
 
 
 
