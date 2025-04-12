@@ -16,6 +16,31 @@ clc;clear;close all;
 % - Perhaps need to load battery parameters, or run the battery simulation
 % - Include things like delta SOC & goal charging time, tolerances, etc. 
 
+
+%% ===============From Paper===============
+rawFromPaper = readmatrix("csv/Current_Profile.csv");
+rawTime = rawFromPaper(:,1);
+rawCurrent = rawFromPaper(:,2);
+
+figure
+plot(rawTime,rawCurrent)
+xlabel("Time (s)")
+ylabel("Current (A)")
+title("Charge Current Profile from Paper __?__")
+grid on
+
+%% ===============CC===============
+
+%% ===============CC-CV===============
+
+%% ===============Pulse===============
+
+
+
+
+
+
+
 % - Run the simulation and the optimizer to generate the charging profile
 
 % - Save the charging profile(s) to be used in the battery degredation
