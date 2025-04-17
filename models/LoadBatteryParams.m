@@ -11,8 +11,8 @@ OCVData = readmatrix("csv/OCV.csv"); % from [@vijay: insert link]
 % voltage
 SOC = OCVData(:,1);
 Vocv = OCVData(:,2);
-SOC_i = 0.99;
-SOC_f = 0.2;
+SOC_i = 0.2;
+SOC_f = 0.8;
 
 Vtmax = 345;
 Vtmin = 192;

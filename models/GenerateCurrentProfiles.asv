@@ -1,0 +1,206 @@
+%% MECHENG 565 Project: Fast Charging Group 1
+clc;clear;close all;
+%% ===============Contributors===============
+% Vijay Balasekaran     vbalasek@umich.edu
+% Clayton Garmon        cjgarmon@umich.edu
+% Skylar Lennon         skylarl@umich.edu
+% Justin Ryu            jusryu@umich.edu
+% Emma Tum Suden        emmadt@umich.edu
+
+% Idea: There are 5 current profile shapes that we'd like to investigate
+% using for fast charging of our electric vehicle model. CC, CC-CV, and
+% P1-1, P2-1, & P2-2. The shapes of these current profiles can be found in 
+% the csv/ folder. However, the magnitude and duration of the profiles must
+% be adapted in order to make them comparable such that they produce the
+% same change in SOC over the same period of time without exceeding the
+% temperature, power, and voltage constraints of the battery. Thus, this
+% program takes in these current profile shapes, and iteratively runs the
+% battery simulation to determine the optimal magnitude and duration of the
+% current profile. 
+
+% decisions to make: use the OCV(z) LUT?
+
+%% ===============Parameters===============
+simTime = 0; % determined by the algorithm
+
+
+
+profileNumber = 1;      % 1 = CC
+                        % 2 = CC - CV
+                        % 3 = P1-1
+                        % 4 = P2-1
+                        % 5 = P2-2
+                        % For battery testing:
+                        % 6 = Single Pulse
+                        % 7 = Repeating Pulses
+                        % 8 = CC - Rest
+
+switch profileNumber
+    case 1
+        curProfileShapeName = "csv/CC_current_profile.csv";
+    case 2
+        curProfileShapeName = "csv/CC_current_profile.csv";
+    case 3
+    case 4
+    case 5
+    case 6
+    case 7
+    case 8
+    otherwise
+        error("Incorrect current profile number selected.")
+end
+
+
+%% ===============From Paper===============
+rawFromPaper = readmatrix("csv/Current_Profile.csv");
+rawTime = rawFromPaper(:,1);
+rawCurrent = rawFromPaper(:,2);
+
+figure
+plot(rawTime,rawCurrent)
+xlabel("Time (s)")
+ylabel("Current (A)")
+title("Charge Current Profile from Paper __?__")
+grid on
+
+%% ===============CC===============
+run_time= 600; %seconds
+I_CC= 3; 
+delta_t= 1;
+time= 0:delta_t:run_time;
+current = I_CC* ones(size(time));
+
+data= [time', current'];
+
+filename = "csv/CC_current_profile.csv";
+writematrix( data, filename )
+
+%% ======= Single Pulse======
+run_time= 600; %seconds
+delta_t= 1;
+time= 0:delta_t:run_time;
+
+I_base= 0; % A
+I_pulse= 4; % A
+t_pulse= 5; % s
+pulse_start_t= 10; %s
+
+pulse_end= pulse_start_t + t_pulse;
+
+current= I_base* ones(size(time));
+
+for i=1:length(time)
+    t= time(i);
+    if t>= pulse_start_t && t<pulse_end
+        current(i)= I_pulse;
+    else
+        current(i)= I_base;
+    end
+end
+
+
+data= [time', current'];
+
+filename = "csv/Pulse_current_profile.csv";
+writematrix( data, filename )
+
+%% ===============Repeating Pulses===============
+
+run_time= 600; %seconds
+delta_t= 1;
+time= 0:delta_t:run_time;
+
+I_base= 0; % A
+I_pulse= 4; % A
+t_pulse= 5; %s
+t_break= 10; %s
+
+current = zeros(size(time));
+
+pulse_time= t_pulse + t_break;
+
+for i = 1:length(time)
+    t = time(i);
+    % Determine if we're in the ON or OFF part of the pulse cycle
+    remainder = mod(t, pulse_time);
+    
+    if remainder < t_pulse
+        current(i) = I_pulse;  % ON phase
+    else
+        current(i) = I_base;   % OFF phase
+    end
+end
+
+
+data= [time', current'];
+
+filename = "csv/Pulses_current_profile.csv";
+writematrix( data, filename )
+
+%% ============CC - Rest =============
+run_time= 600; %seconds
+I_CC= 3; %A
+CC_time= 20; %s
+delta_t= 1;
+time= 0:delta_t:run_time;
+current = I_CC* ones(size(time));
+
+
+for i=1:length(time)
+    t= time(i);
+    if t<= CC_time
+        current(i)= I_CC;
+    else
+        current(i)= 0;
+    end
+end
+
+
+data= [time', current'];
+
+filename = "csv/CCRest_current_profile.csv";
+writematrix( data, filename )
+
+
+%% ===== CC-CV=====
+
+% implement function block to ensure current transitions at correct point
+
+function current = CC_CV_profile(time, voltage)
+
+    I_CC = 1.0;     
+    V_target = 4.2;       
+    timeConstant = 3600;       % Time constant for exponential current decay in CV phase (seconds)
+    
+    if voltage < V_target
+        current = I_CC;
+
+    else
+        current = I_CC * exp(-time/timeConstant);
+
+    end
+   
+    current = max(current, 0.01);
+end
+
+
+% TODO: WRITEMATRIX TO "Active_Current_Profile.csv"
+
+
+
+
+
+
+
+
+% - Run the simulation and the optimizer to generate the charging profile
+
+% - Save the charging profile(s) to be used in the battery degredation
+% simulations
+
+
+% Notes:
+% - Perhaps to simplify, we only include effects of charging and not
+% discharging, don't really know how to estimate the expected discharge
+% profiles of an EV unless we wanted to run like a EPA drive cycle and
+% simple road load model
