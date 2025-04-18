@@ -9,7 +9,7 @@ SOCOut = ans.SOCOut;
 
 % Cell
 currentOutCell = ans.currentOutCell;
-OCVOutCell = ans.OCVOutCell.*ones(1,length(ans.simTime));
+OCVOutCell = ans.OCVOutCell;
 VtOutCell = ans.VtOutCell;
 SOCOutCell = ans.SOCOutCell;
 

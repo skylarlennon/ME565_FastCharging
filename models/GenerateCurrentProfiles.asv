@@ -21,9 +21,11 @@ clc;clear;close all;
 % decisions to make: use the OCV(z) LUT?
 
 %% ===============Parameters===============
-simTime = 0; % determined by the algorithm
+LoadBatteryParams;
 
-
+% Constraints
+maxTemp = 60; %C ???
+% chargeTimeTolerance = 20; % s ???
 
 profileNumber = 1;      % 1 = CC
                         % 2 = CC - CV
@@ -35,172 +37,70 @@ profileNumber = 1;      % 1 = CC
                         % 7 = Repeating Pulses
                         % 8 = CC - Rest
 
+delta_t = 1;
+time = [];
+current = [];
+total_time = 25*60; %seconds (typical fast charging speed)
 switch profileNumber
     case 1
-        curProfileShapeName = "csv/CC_current_profile.csv";
+        I_CC = -500;
+        time = [0:delta_t:total_time]';
+        current = I_CC * ones(length(time),1);
     case 2
-        curProfileShapeName = "csv/CC_current_profile.csv";
+        I_CCCV_Init = -500;
     case 3
-    case 4
-    case 5
-    case 6
-    case 7
-    case 8
+        % TODO
     otherwise
-        error("Incorrect current profile number selected.")
+        error("incorrect profile number")
 end
 
+timeCurrentData = timeseries(current,time);
 
-%% ===============From Paper===============
-rawFromPaper = readmatrix("csv/Current_Profile.csv");
-rawTime = rawFromPaper(:,1);
-rawCurrent = rawFromPaper(:,2);
-
-figure
-plot(rawTime,rawCurrent)
-xlabel("Time (s)")
-ylabel("Current (A)")
-title("Charge Current Profile from Paper __?__")
-grid on
-
-%% ===============CC===============
-run_time= 600; %seconds
-I_CC= 3; 
-delta_t= 1;
-time= 0:delta_t:run_time;
-current = I_CC* ones(size(time));
-
-data= [time', current'];
-
-filename = "csv/CC_current_profile.csv";
-writematrix( data, filename )
-
-%% ======= Single Pulse======
-run_time= 600; %seconds
-delta_t= 1;
-time= 0:delta_t:run_time;
-
-I_base= 0; % A
-I_pulse= 4; % A
-t_pulse= 5; % s
-pulse_start_t= 10; %s
-
-pulse_end= pulse_start_t + t_pulse;
-
-current= I_base* ones(size(time));
-
-for i=1:length(time)
-    t= time(i);
-    if t>= pulse_start_t && t<pulse_end
-        current(i)= I_pulse;
-    else
-        current(i)= I_base;
-    end
+% Simulate once
+if profileNumber == 1 || profileNumber == 3
+    sim("battery_pack.slx");
+    GatherResults;
+    SimThermal;
+    PlotThermal;
+    PlotCell;
+    PlotPack;
+else
+    sim("battery_pack_CCCV.slx");
+    GatherResults;
+    SimThermal;
+    PlotThermal;
+    PlotCell;
+    PlotPack;
 end
 
+% conditions:
+% FOR CONSTANT CURRENT CHARGING:
+% - SOC didn't get to 80% before the over voltage protection tripped.
+% (check SOCOut(end) that it's 0.8 or slightly greater 
+% - Didn't get too hot during the cycle (check that max(Tc) < TcMax
+% - Took too long to get to 80% SOC (check simTime(end), if it's greater
+% than chareTimeGoal, then increase 
 
-data= [time', current'];
-
-filename = "csv/Pulse_current_profile.csv";
-writematrix( data, filename )
-
-%% ===============Repeating Pulses===============
-
-run_time= 600; %seconds
-delta_t= 1;
-time= 0:delta_t:run_time;
-
-I_base= 0; % A
-I_pulse= 4; % A
-t_pulse= 5; %s
-t_break= 10; %s
-
-current = zeros(size(time));
-
-pulse_time= t_pulse + t_break;
-
-for i = 1:length(time)
-    t = time(i);
-    % Determine if we're in the ON or OFF part of the pulse cycle
-    remainder = mod(t, pulse_time);
-    
-    if remainder < t_pulse
-        current(i) = I_pulse;  % ON phase
-    else
-        current(i) = I_base;   % OFF phase
-    end
-end
-
-
-data= [time', current'];
-
-filename = "csv/Pulses_current_profile.csv";
-writematrix( data, filename )
-
-%% ============CC - Rest =============
-run_time= 600; %seconds
-I_CC= 3; %A
-CC_time= 20; %s
-delta_t= 1;
-time= 0:delta_t:run_time;
-current = I_CC* ones(size(time));
-
-
-for i=1:length(time)
-    t= time(i);
-    if t<= CC_time
-        current(i)= I_CC;
-    else
-        current(i)= 0;
-    end
-end
-
-
-data= [time', current'];
-
-filename = "csv/CCRest_current_profile.csv";
-writematrix( data, filename )
-
-
-%% ===== CC-CV=====
-
-% implement function block to ensure current transitions at correct point
-
-function current = CC_CV_profile(time, voltage)
-
-    I_CC = 1.0;     
-    V_target = 4.2;       
-    timeConstant = 3600;       % Time constant for exponential current decay in CV phase (seconds)
-    
-    if voltage < V_target
-        current = I_CC;
-
-    else
-        current = I_CC * exp(-time/timeConstant);
-
-    end
-   
-    current = max(current, 0.01);
-end
-
-
-% TODO: WRITEMATRIX TO "Active_Current_Profile.csv"
+% FOR CC-CV CHARGING:
+% - SOC didn't get to 80% before the over voltage protection tripped.
+% (check SOCOut(end) that it's 0.8 or slightly greater 
+% - Didn't get too hot during the cycle (check that max(Tc) < TcMax
+% - Took too long to get to 80% SOC (check simTime(end), if it's greater
+% than chareTimeGoal, then increase 
 
 
 
+% while conditions aren't met
+%     check which conditions aren't met
+%           SOC not high enough @ end of time? increase current        
+%           too hot? decrease current
+%           terminal voltage exceeded? decrease current near high SOC
+%           etc. 
+%     adjust them accordingly
+%     run the simulation again
+%     gather the results
+%     adjust
+%     see if conditions are met again
 
-
-
-
-
-% - Run the simulation and the optimizer to generate the charging profile
-
-% - Save the charging profile(s) to be used in the battery degredation
-% simulations
-
-
-% Notes:
-% - Perhaps to simplify, we only include effects of charging and not
-% discharging, don't really know how to estimate the expected discharge
-% profiles of an EV unless we wanted to run like a EPA drive cycle and
-% simple road load model
+% Once you have a profile that's working, use that as an input the the
+% SimSOH and see how much the battery degrades in N cycles. 

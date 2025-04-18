@@ -33,9 +33,10 @@ function dydt = thermal_ode(t, y, tspan, I_vec, Vt_vec, OCV, ...
                             Rc, Ru, Rm, Cc, Cs, Tf, N)
 
     % Interpolate input data
-    I_val = interp1(tspan, I_vec, t);
-    Vt_val = interp1(tspan, Vt_vec, t);
-    OCV_val = interp1(tspan, OCV, t);
+    I_val = interp1(tspan, I_vec, t, 'linear', 'extrap');
+    Vt_val = interp1(tspan, Vt_vec, t, 'linear', 'extrap');
+    OCV_val = interp1(tspan, OCV, t, 'linear', 'extrap');
+
 
 
     % Extract state

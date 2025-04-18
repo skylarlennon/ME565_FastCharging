@@ -14,14 +14,16 @@ Vocv = OCVData(:,2);
 SOC_i = 0.2;
 SOC_f = 0.8;
 
-Vtmax = 345;
-Vtmin = 192;
-Vtmax_cell = Vtmax/series; % double check
-Vtmin_cell = Vtmin/series; % double check
-
+Vtmax_cell = 3.57; 
+Vtmin_cell = 2;
 Qcell = 2.25; % [Ah]
+
+Vtmax = Vtmax_cell*series;
+Vtmin = Vtmin_cell*series;
+
 TcInit = Tambient;
 TsInit = Tambient;
+TcMax = 318; %K
 
 Rs = 0.013;
 R1 = 0.026;
@@ -42,3 +44,8 @@ R1_pack = 0.026 * (series/parallel);
 R2_pack = 0.026 * (series/parallel);
 C1_pack = 53958 * (parallel/series);
 C2_pack = 53958 * (parallel/series);
+
+% For CCCV
+I_CCCV_Init = -400;
+Kaw = 1;
+Ki = 50;

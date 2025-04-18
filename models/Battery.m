@@ -11,7 +11,7 @@ clc;clear;close all;
 LoadBatteryParams;
 
 %% =============Load Current Profiles=============
-currentFileName = "Active_Current_Profile.csv";
+currentFileName = "csv/CC_current_profile.csv";
 rawData = readmatrix(currentFileName);
 time = rawData(:,1);
 total_time = time(end);
@@ -21,16 +21,18 @@ current = rawData(:,2);
 timeCurrentData = timeseries(current, time);
 
 %% =============Simulate=============
-sim("battery_pack.slx")
+sim("battery_pack_CCCV.slx")
+
 GatherResults;
-SimThermal;
-SimSOH;
+plot(simTime,ans.currentOut)
+% SimThermal;
+% SimSOH;
 
 %% =============Plot Results=============
 PlotPack;
 PlotCell;
-PlotThermal;
-PlotSOH;
+% PlotThermal;
+% PlotSOH;
 
 
 

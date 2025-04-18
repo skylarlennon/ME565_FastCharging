@@ -8,8 +8,8 @@ clc;clear;close all;
 % Emma Tum Suden        emmadt@umich.edu
 
 %% ===============CC===============
-Time_CC= 600; %seconds
-I_CC= -500; %A 
+Time_CC= 700; %seconds
+I_CC= -600; %A 
 delta_t = 1;
 time_CC = 0:delta_t:Time_CC;
 current_CC = I_CC* ones(size(time_CC));
