@@ -12,7 +12,7 @@ OCVData = readmatrix("csv/OCV.csv"); % from [@vijay: insert link]
 SOC = OCVData(:,1);
 Vocv = OCVData(:,2);
 SOC_i = 0.2;
-SOC_f = 0.8;
+SOC_f = 0.95;
 
 Vtmax_cell = 3.57; 
 Vtmin_cell = 2;

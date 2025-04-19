@@ -1,35 +1,36 @@
-%% Simulate the state of health 
+%% Constants
+B = 1e7;
+gamma = 0.55;
+c = 1;
+Ea = 31700 - 370.3 * c;
+R = 8.3;
+Tc = 298;
+Cb = 559440;  % [As] = 155.4 Ah * 3600
 
-K = 1000;
-KVec = (linspace(0,K,K));
-SOHVec = zeros(1,K);
-Ah_20pct = Qpack*0.80;
-for i = 1:K
-    SOH = compute_soh(simTime, currentOut, Qpack,Qpack*0.8);  % Assume Ah_20pct = 600 Ah
-    SOHVec(i) = SOH(end);
-    Qpack = Qpack*SOH(end);
-end
+%% Compute Ah_20% and N
+Ah_20pct = (20 / (B * exp(-Ea / (R * Tc))))^(1 / gamma);  % Eq. 19
+N = (3600 * Ah_20pct) / Cb;  % Eq. 20
 
-%% Functions
+%% Simulation settings
+% numCycles = 1000;
+SOH = 1;
+SOHVec = zeros(1, numCycles);
 
-function SOH = compute_soh(time, current, C_b, Ah_20pct)
-    % time:       [s] time vector from simulation
-    % current:    [A] current vector (positive = discharge)
-    % C_b:        [Ah] cell or pack capacity
-    % Ah_20pct:   [Ah] amp-hour throughput when 20% capacity lost (from Eq. 19)
-    
-    % Step 1: Compute number of cycles until 20% loss
-    N = (3600 * Ah_20pct) / C_b;   % from Eq. (20)
+%% --- Loop Through Charging Cycles ---
+for i = 1:numCycles
+    % Calculate ampere-seconds used in this cycle
+    amp_sec_used = trapz(abs(current))/1e7;  % ∫ |I(t)| dt
 
-    % Step 2: Compute cumulative amp-hour throughput
-    dt = diff(time);                              % time steps [s]
-    Iavg = (abs(current(1:end-1)) + abs(current(2:end))) / 2;  % average abs current
-    dAh = Iavg .* dt / 3600;                      % Ah per time step
-    ampHoursUsed = [0; cumsum(dAh)];              % integrate
+    % SOH degradation equation (Eq. 21)
+    SOH = SOH - amp_sec_used / (2 * N * Cb);
+    SOH = max(SOH, 0);  % Clamp between 0–1
 
-    % Step 3: Compute SOH over time
-    SOH = 1 - ampHoursUsed / (2 * N * C_b);        % Eq. (21), assuming SOH(t0) = 1
+    % Store SOH
+    SOHVec(i) = SOH;
 
-    % Clamp to [0, 1] range
-    SOH = max(min(SOH, 1), 0);
+    % Optional: stop early if SOH drops below 80%
+    if SOH <= 0.8
+        fprintf('SOH dropped below 80%% at cycle %d\n', i);
+        break;
+    end
 end

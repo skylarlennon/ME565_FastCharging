@@ -23,13 +23,10 @@ clc;clear;close all;
 %% ===============Parameters===============
 LoadBatteryParams;
 
-% Constraints
-maxTemp = 60; %C ???
-% chargeTimeTolerance = 20; % s ???
-
-profileNumber = 1;      % 1 = CC
+profileNumber = 2;      % 1 = CC
                         % 2 = CC - CV
                         % 3 = P1-1
+
                         % 4 = P2-1
                         % 5 = P2-2
                         % For battery testing:
@@ -40,67 +37,158 @@ profileNumber = 1;      % 1 = CC
 delta_t = 1;
 time = [];
 current = [];
-total_time = 25*60; %seconds (typical fast charging speed)
-switch profileNumber
-    case 1
-        I_CC = -500;
-        time = [0:delta_t:total_time]';
-        current = I_CC * ones(length(time),1);
-    case 2
-        I_CCCV_Init = -500;
-    case 3
-        % TODO
-    otherwise
-        error("incorrect profile number")
-end
 
-timeCurrentData = timeseries(current,time);
+current_iterations = {};
+time_iterations = {};
+vt_iterations = {};
+soc_iterations = {};
 
-% Simulate once
-if profileNumber == 1 || profileNumber == 3
-    sim("battery_pack.slx");
+chareTimeGoal = 25*60; %seconds (typical fast charging speed)
+total_time = 60*60; % greater to ensure sim finishes.
+
+% Initial values
+I_CC = -500;             % starting CC current (A)
+I_CCCV_Init = -400;      % starting CC portion of CCCV (A)
+V_des = 321.129671339922;            % initial CV target voltage (V)
+SOC_target = 0.95;
+tolerance = 5;           % seconds
+
+max_iter = 100;
+iter = 0;
+done = false;
+
+
+%% ==================== Optimization Loop ====================
+
+while ~done && iter < max_iter
+    iter = iter + 1;
+    fprintf("\n--- Iteration %d ---\n", iter);
+
+    % Regenerate current profile
+    switch profileNumber
+        case 1  % Constant Current
+            time = [0:delta_t:total_time]';
+            current = I_CC * ones(length(time),1);
+            timeCurrentData = timeseries(current, time);
+            sim("battery_pack.slx");
+
+        case 2  % CC-CV
+            assignin('base', 'I_CCCV_Init', I_CCCV_Init);
+            assignin('base', 'V_des', V_des);  % CV voltage target
+            sim("battery_pack_CCCV.slx");
+        case 3 % Current profile paper #1
+            % - load the current profile shape from P1_current_profile.csv
+            % - scale the 'length/time' value of the data between 0 and total_time
+            % - scale the 'height' value of the current to be between a max
+            %   and min value that is adapted each iteration based on the
+            %   results of the simulation. If too hot, decrease the max, if
+            %   too long, increase the max and or the 
+        otherwise
+            error("Unsupported profileNumber for optimization")
+    end
+
+    % Post-simulation processing
     GatherResults;
     SimThermal;
-    PlotThermal;
-    PlotCell;
-    PlotPack;
-else
-    sim("battery_pack_CCCV.slx");
-    GatherResults;
-    SimThermal;
-    PlotThermal;
-    PlotCell;
-    PlotPack;
+
+    % =========UPDATED STORAGE=========
+    current_iterations{end+1} = currentOut(:);  % store as column
+    time_iterations{end+1} = simTime(:);
+    vt_iterations{end+1} = VtOut(:);
+    soc_iterations{end+1} = SOCOut(:);
+
+    % Metrics
+    final_SOC = SOCOut(end);
+    charge_time = simTime(end);
+    max_temp = max(Tc(:));
+
+    fprintf("SOC = %.3f | Time = %.1f s | Max T = %.2f °C\n", final_SOC, charge_time, max_temp);
+
+    % Check all conditions
+    soc_met = final_SOC >= SOC_target;
+    time_met = charge_time <= chareTimeGoal + tolerance;
+    temp_met = max_temp < TcMax;
+
+    if soc_met && time_met && temp_met
+        fprintf("✅ All charging constraints met.\n");
+        done = true;
+        break;
+    end
+
+    % Adjust inputs based on which constraints failed
+    switch profileNumber
+        case 1  % CC adjustment
+            if ~soc_met || ~time_met
+                I_CC = I_CC - 25; % increase charging rate
+            end
+            if ~temp_met
+                I_CC = I_CC + 10; % back off if too hot
+            end
+
+        case 2  % CCCV adjustment
+            if ~soc_met || ~time_met
+                % I_CCCV_Init = I_CCCV_Init - 25;
+                V_des = V_des + 0.05; % try to end at a slightly higher voltage
+            end
+            if ~temp_met
+                I_CCCV_Init = I_CCCV_Init + 10;
+            end
+    end
 end
 
-% conditions:
-% FOR CONSTANT CURRENT CHARGING:
-% - SOC didn't get to 80% before the over voltage protection tripped.
-% (check SOCOut(end) that it's 0.8 or slightly greater 
-% - Didn't get too hot during the cycle (check that max(Tc) < TcMax
-% - Took too long to get to 80% SOC (check simTime(end), if it's greater
-% than chareTimeGoal, then increase 
+if ~done
+    fprintf("⚠️ Constraints not met after %d iterations.\n", max_iter);
+end
 
-% FOR CC-CV CHARGING:
-% - SOC didn't get to 80% before the over voltage protection tripped.
-% (check SOCOut(end) that it's 0.8 or slightly greater 
-% - Didn't get too hot during the cycle (check that max(Tc) < TcMax
-% - Took too long to get to 80% SOC (check simTime(end), if it's greater
-% than chareTimeGoal, then increase 
+%% ========= Plot Current, Voltage, and SOC Profiles Over Iterations =========
+figure;
+
+n_iter = length(current_iterations);
+
+% ----- Current Plot -----
+subplot(3,1,1)
+hold on; grid on;
+title('Current Profile Iterations');
+xlabel('Time [s]');
+ylabel('Current [A]');
+
+for k = 1:n_iter-1
+    plot(time_iterations{k}, current_iterations{k}, 'Color', [0.6, 0.6, 0.6], 'LineWidth', 1);
+end
+h_prev = plot(nan, nan, 'Color', [0.6, 0.6, 0.6], 'LineWidth', 1);
+h_final = plot(time_iterations{end}, current_iterations{end}, 'r', 'LineWidth', 2.5);
+xline(chareTimeGoal, '--k', 'LineWidth', 1.5);
+legend([h_prev, h_final], {'Previous Iterations', 'Final Successful Iteration'}, 'Location', 'best');
 
 
+% ----- Voltage Plot -----
+subplot(3,1,2)
+hold on; grid on;
+title('Voltage Profile Iterations');
+xlabel('Time [s]');
+ylabel('Terminal Voltage [V]');
 
-% while conditions aren't met
-%     check which conditions aren't met
-%           SOC not high enough @ end of time? increase current        
-%           too hot? decrease current
-%           terminal voltage exceeded? decrease current near high SOC
-%           etc. 
-%     adjust them accordingly
-%     run the simulation again
-%     gather the results
-%     adjust
-%     see if conditions are met again
+for k = 1:n_iter-1
+    plot(time_iterations{k}, vt_iterations{k}, 'Color', [0.6, 0.6, 0.6], 'LineWidth', 1);
+end
+h_prev_vt = plot(nan, nan, 'Color', [0.6, 0.6, 0.6], 'LineWidth', 1);
+h_final_vt = plot(time_iterations{end}, vt_iterations{end}, 'r', 'LineWidth', 2.5);
+yline(Vtmax, ':m', 'LineWidth', 1.5);
+xline(chareTimeGoal, '--k', 'LineWidth', 1.5);
+legend([h_prev_vt, h_final_vt], {'Previous Iterations', 'Final Successful Iteration'}, 'Location', 'best');
 
-% Once you have a profile that's working, use that as an input the the
-% SimSOH and see how much the battery degrades in N cycles. 
+
+% ----- SOC Plot -----
+subplot(3,1,3)
+hold on; grid on;
+title('SOC Profile Iterations');
+xlabel('Time [s]');
+ylabel('State of Charge');
+
+for k = 1:n_iter-1
+    plot(time_iterations{k}, soc_iterations{k}, 'Color', [0.6, 0.6, 0.6], 'LineWidth', 1);
+end
+h_prev_soc = plot(nan, nan, 'Color', [0.6, 0.6, 0.6], 'LineWidth', 1);
+h_final_soc = plot(time_iterations{end}, soc_iterations{end}, 'r', 'LineWidth', 2.5);
+xline(chareTimeGoal, '--k', 'LineWidth', 1.5);
+legend([h_prev_soc, h_final_soc], {'Previous Iterations', 'Final Successful Iteration'}, 'Location', 'best');
