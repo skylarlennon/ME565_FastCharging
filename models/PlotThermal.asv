@@ -1,0 +1,18 @@
+    % Plot
+    figure;
+    subplot(2,1,1);
+    plot(simTime, Tc,'LineWidth',2);
+    title('P1 Charge: Core Temperatures');
+    xlabel('Time [s]'); ylabel('Temp [K]');
+    grid on
+
+    subplot(2,1,2);
+    plot(simTime, Ts,'LineWidth',2);
+    title('P1 Charge: Surface Temperatures');
+    xlabel('Time [s]'); ylabel('Temp [K]');
+    grid on
+
+    MaxTc = max(Tc);
+    MaxTs = max(Ts);
+
+    worstTemp = max(MaxTs)
